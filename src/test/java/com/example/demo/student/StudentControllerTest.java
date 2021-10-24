@@ -9,6 +9,6 @@ public class StudentControllerTest {
     public void testGetStudent() {
         StudentController controller = new StudentController();
         Student student = controller.getStudent(1);
-        Assertions.assertEquals("James Bond1", student.getStudentName());
+        Assertions.assertEquals("James Bond", student.getStudentName());
     }
 }
