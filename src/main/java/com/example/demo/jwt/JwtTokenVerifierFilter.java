@@ -3,14 +3,12 @@ package com.example.demo.jwt;
 import com.google.common.base.Strings;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
 
 import javax.crypto.SecretKey;
 import javax.servlet.FilterChain;
@@ -23,29 +21,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class JwtTokenVerifier extends OncePerRequestFilter {
+public class JwtTokenVerifierFilter extends AbstractAuthenticationProcessingFilter {
 
     private final SecretKey secretKey;
     private final JwtConfig jwtConfig;
 
-    public JwtTokenVerifier(SecretKey secretKey,
-                            JwtConfig jwtConfig) {
+    public JwtTokenVerifierFilter(String url,
+                                  SecretKey secretKey,
+                                  JwtConfig jwtConfig) {
+        super(url);
         this.secretKey = secretKey;
         this.jwtConfig = jwtConfig;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) {
 
         String authorizationHeader = request.getHeader(jwtConfig.getAuthorizationHeader());
-
-        if (Strings.isNullOrEmpty(authorizationHeader) || !authorizationHeader.startsWith(jwtConfig.getTokenPrefix())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         String token = authorizationHeader.replace(jwtConfig.getTokenPrefix(), "");
 
         try {
@@ -64,18 +56,26 @@ public class JwtTokenVerifier extends OncePerRequestFilter {
                     .map(m -> new SimpleGrantedAuthority(m.get("authority")))
                     .collect(Collectors.toSet());
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    username,
-                    null,
-                    simpleGrantedAuthorities
-            );
+            return new UsernamePasswordAuthenticationToken(username,null, simpleGrantedAuthorities);
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        } catch (JwtException e) {
-            throw new IllegalStateException(String.format("Token %s cannot be trusted", token));
+        } catch (Exception e) {
+            throw new InvalidJwtTokenException(String.format("Token %s cannot be trusted", token), e);
         }
+    }
 
-        filterChain.doFilter(request, response);
+    @Override
+    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException, ServletException {
+        SecurityContextHolder.getContext().setAuthentication(authResult);
+        chain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean requiresAuthentication(HttpServletRequest request, HttpServletResponse response) {
+        return super.requiresAuthentication(request, response) && containsToken(request);
+    }
+
+    private boolean containsToken(HttpServletRequest request) {
+        String authorizationHeader = request.getHeader(jwtConfig.getAuthorizationHeader());
+        return !Strings.isNullOrEmpty(authorizationHeader) && authorizationHeader.startsWith(jwtConfig.getTokenPrefix());
     }
 }
