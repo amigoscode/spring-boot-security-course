@@ -2,7 +2,7 @@ package com.example.demo.security;
 
 import com.example.demo.auth.ApplicationUserService;
 import com.example.demo.jwt.JwtConfig;
-import com.example.demo.jwt.JwtTokenVerifier;
+import com.example.demo.jwt.JwtTokenVerifierFilter;
 import com.example.demo.jwt.JwtUsernameAndPasswordAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +25,8 @@ import static com.example.demo.security.ApplicationUserRole.*;
 @EnableWebSecurity
 @EnableGlobalMethodSecurity(prePostEnabled = true)
 public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private static final String SECURE_URL_PATTERN = "/api/**";
 
     private final PasswordEncoder passwordEncoder;
     private final ApplicationUserService applicationUserService;
@@ -50,10 +52,10 @@ public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
                     .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .addFilter(new JwtUsernameAndPasswordAuthenticationFilter(authenticationManager(), jwtConfig, secretKey))
-                .addFilterAfter(new JwtTokenVerifier(secretKey, jwtConfig),JwtUsernameAndPasswordAuthenticationFilter.class)
+                .addFilterAfter(new JwtTokenVerifierFilter(SECURE_URL_PATTERN, secretKey, jwtConfig),JwtUsernameAndPasswordAuthenticationFilter.class)
                 .authorizeRequests()
                 .antMatchers("/", "index", "/css/*", "/js/*").permitAll()
-                .antMatchers("/api/**").hasRole(STUDENT.name())
+                .antMatchers(SECURE_URL_PATTERN).hasRole(STUDENT.name())
                 .anyRequest()
                 .authenticated();
     }
